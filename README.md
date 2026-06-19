@@ -1,138 +1,70 @@
 # dance-bot
 
-Агрегатор анонсов социальных танцев из Telegram-каналов (Минск). Скачивает посты, извлекает события через LLM, сохраняет в SQLite и синхронизирует с Google Calendar.
+Агрегатор анонсов социальных танцев (bachata, kizomba, zouk) из Telegram-каналов Минска. Бот собирает посты из студий и сообществ, извлекает даты и места через LLM и публикует события в общий Google Calendar **«Танцы Минск»**.
 
-Открытые задачи — в [TODO.md](TODO.md).
+**Источники:** студии и каналы вроде [Kredo](https://t.me/kredo_dance), [Plyas Dance](https://t.me/plyas_dance), [Dance Forever](https://t.me/danceforever_minsk), [ESTA RICO](https://t.me/estarico_dance) и другие.
 
-## Требования
+**Что попадает в календарь:** вечеринки, open-air, протанцовки, классы — с указанием времени, места, цены и ссылкой на оригинальный пост.
 
-- **macOS** (для автозапуска через `launchd`; на Linux/Windows тоже работает, автозапуск надо адаптировать)
-- **Python 3.11+** — ставится автоматически через `uv`
-- **[uv](https://docs.astral.sh/uv/)** — менеджер пакетов
-- **`claude` CLI** — LLM-парсинг через подписку Claude Code (`claude-haiku-4-5`)
+---
 
-### Установка uv
+## Добавить календарь к себе
 
-```sh
-brew install uv
-```
+Календарь публичный. Подписка бесплатная, аккаунт Google нужен только для просмотра и синхронизации на телефон.
 
-или:
+### Быстрый способ — по ссылке
 
-```sh
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+Откройте ссылку в браузере, где вы залогинены в Google:
 
-## Установка
+**[Танцы Минск — добавить календарь](https://calendar.google.com/calendar/u/0?cid=M2I3NWE2NjhiOTdjZjAxZjgxZmE1Mjc5N2UyZGFkOTEzZTgxMDkxNDMzNzU0OGY4OTQ1ZWVmMGVhNjVmYzAwN0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t)**
 
-```sh
-uv sync
-```
+1. Перейдите по ссылке.
+2. Откроется Google Calendar с предложением добавить календарь **«Танцы Минск»**.
+3. Нажмите **«+ Добавить»** (или **Add**).
+4. Календарь появится в списке слева — включите галочку, чтобы видеть события.
 
-## Настройка
+### Через настройки Google Calendar (веб)
 
-### Telegram
-
-1. Создать приложение на [my.telegram.org/apps](https://my.telegram.org/apps).
-2. Заполнить `.env`:
+1. Откройте [calendar.google.com](https://calendar.google.com).
+2. Справа от **«Другие календари»** нажмите **«+»** → **«Подписаться на календарь»**.
+3. Вставьте ссылку:
 
    ```
-   TELEGRAM_API_ID=12345
-   TELEGRAM_API_HASH=abcdef0123456789abcdef0123456789
-   TELEGRAM_PHONE=+375291234567
+   https://calendar.google.com/calendar/u/0?cid=M2I3NWE2NjhiOTdjZjAxZjgxZmE1Mjc5N2UyZGFkOTEzZTgxMDkxNDMzNzU0OGY4OTQ1ZWVmMGVhNjVmYzAwN0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t
    ```
 
-3. Авторизоваться:
+4. Нажмите **«Добавить календарь»**.
 
-   ```sh
-   uv run python scripts/login.py
-   ```
+### На телефоне (Android / iPhone)
 
-Сессия сохраняется в `data/bot.session` (в `.gitignore`).
+**Android (приложение Google Calendar):**
 
-### Google Calendar
+1. Откройте ссылку на календарь в Chrome — должно предложить добавить календарь.
+2. Либо: приложение Google Calendar → **≡** → **Настройки** → **Добавить аккаунт** (если ещё нет Google) → затем в браузере добавьте календарь по ссылке выше — он синхронизируется автоматически.
 
-1. Создать проект на [console.cloud.google.com](https://console.cloud.google.com), включить **Google Calendar API**.
-2. OAuth consent screen (External) + Desktop OAuth client → скачать JSON как `data/google_credentials.json`.
-3. Создать календарь **«Танцы Минск»** на [calendar.google.com](https://calendar.google.com) (или поменять `google_calendar_name` в `config.py`).
-4. Авторизоваться:
+**iPhone (приложение Google Calendar):**
 
-   ```sh
-   uv run python scripts/google_login.py
-   ```
+1. Установите [Google Calendar](https://apps.apple.com/app/google-calendar/id909319292) и войдите в тот же Google-аккаунт.
+2. Откройте ссылку на календарь в Safari → **Добавить**.
+3. События появятся в приложении Google Calendar.
 
-## Запуск
+> **Примечание:** в стандартном приложении «Календарь» на iOS подписка на Google Calendar работает только через синхронизацию аккаунта Google в настройках iPhone (**Настройки → Календарь → Учётные записи → Google**). Проще использовать приложение Google Calendar.
 
-```sh
-uv run dance-bot
-```
+### Как читать события
 
-## Пайплайн
+| Поле | Пример |
+|------|--------|
+| Название | `Bachata / Kizomba — Party` |
+| Место | `Bali, Кирова, 13` |
+| Описание | тип, танцы, цена, текст поста, ссылка на Telegram |
+| Цвет | красный — party, зелёный — open-air, бирюзовый — протанцовка, синий — класс |
 
-```
-fetch_messages → parse_messages → parse_events → sync_calendar
-```
+---
 
-| Этап | Модуль | Что делает |
-|------|--------|------------|
-| 1 | `fetch_messages.py` | Telegram → `raw_messages` (инкрементально, keyword-фильтр) |
-| 2 | `parse_messages.py` | LLM → `parsed_messages` (только новые, прошедшие фильтр) |
-| 3 | `parse_events.py` | JSON → `events` (с дедупом по `dedup_key`) |
-| 4 | `sync_calendar.py` | `events` → Google Calendar (через `sync_log`) |
+## Для разработчиков
 
-Каждый этап идемпотентен — повторный запуск обрабатывает только новые данные.
+Техническая документация — в папке [dev_docs/](dev_docs/):
 
-## База данных
-
-Файл `data/events.db` (SQLite):
-
-| Таблица | Назначение |
-|---------|------------|
-| `raw_messages` | Сырые посты из Telegram + `filter_passed` |
-| `parsed_messages` | Сырой JSON-ответ LLM по каждому посту |
-| `events` | Структурированные события с `dedup_key` |
-| `sync_log` | Что и когда отправлено в календарь |
-
-## Google Calendar
-
-- Календарь: **«Танцы Минск»**
-- Title: `Bachata / Kizomba — Party`
-- Цвета: party — красный, open-air — зелёный, протанцовка — бирюзовый, класс — синий
-- Дедуп: `dedup_key = SHA256(date|time_start|location)` как `event.id`
-- Удалённые в UI события (`cancelled`) восстанавливаются при следующей синхронизации
-
-## Конфигурация
-
-Основные параметры в `src/dance_bot/config.py`:
-
-| Параметр | По умолчанию |
-|----------|--------------|
-| `telegram_channels` | `kredo_dance`, `plyas_dance`, `KIZonEVERYone`, `danceforever_minsk`, `estarico_dance` |
-| `history_hours` | `168` (7 дней — глубина при первой загрузке канала, если в БД нет сообщений) |
-| `google_calendar_name` | `Танцы Минск` |
-| `timezone` | `Europe/Minsk` |
-
-## Структура проекта
-
-```
-dance-bot/
-  pyproject.toml
-  .env                          # секреты (gitignored)
-  prompts/
-    extract_event.md            # промпт для LLM
-  src/dance_bot/
-    main.py                     # оркестратор
-    config.py
-    db.py                       # SQLite
-    fetch_messages.py
-    parse_messages.py
-    parse_events.py
-    sync_calendar.py
-    calendar_sync.py            # Google Calendar API
-    extractor.py                # LLM через claude CLI
-    filters.py                  # keyword-фильтр
-  scripts/
-    login.py
-    google_login.py
-  data/                         # сессии, токены, БД (gitignored)
-```
+- [Установка и запуск](dev_docs/setup.md)
+- [Архитектура](dev_docs/architecture.md)
+- [TODO](dev_docs/TODO.md)
