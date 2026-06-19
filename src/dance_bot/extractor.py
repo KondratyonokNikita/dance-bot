@@ -27,9 +27,10 @@ class Extraction(BaseModel):
     events: list[Event]
 
 
-def extract(text: str, message_date: date) -> tuple[Extraction, str]:
+def extract(text: str, message_date: date, channel: str) -> tuple[Extraction, str]:
     prompt = (
         f"{_SYSTEM_PROMPT}\n\n"
+        f"Канал: {channel}\n"
         f"Дата публикации поста: {message_date.isoformat()}\n\n"
         f"Текст поста:\n{text}\n\n"
         'Ответь ТОЛЬКО валидным JSON вида {"events": [...]} без markdown, без объяснений.'

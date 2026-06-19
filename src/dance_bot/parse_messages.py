@@ -13,7 +13,9 @@ def parse_messages(db: Database) -> None:
         return
 
     for row in rows:
-        parsed, raw = extract(row.message or "", row.message_date.date())
+        parsed, raw = extract(
+            row.message or "", row.message_date.date(), row.channel
+        )
         parsed_message_id = db.insert_parsed_message(row.id, raw)
 
         print()
