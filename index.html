@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Танцы Минск — расписание</title>
+  <title>Bachata · Kizomba · Zouk — Минск</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -13,77 +13,40 @@
       background: #fafafa;
     }
     header {
-      padding: 1rem 1.5rem;
+      padding: 0.75rem 1.5rem;
       text-align: center;
       background: #fff;
       border-bottom: 1px solid #e5e5e5;
     }
     header h1 {
-      margin: 0 0 0.25rem;
-      font-size: 1.5rem;
+      margin: 0 0 0.5rem;
+      font-size: 1.25rem;
       font-weight: 600;
+      line-height: 1.35;
     }
-    header p {
-      margin: 0;
-      color: #666;
-      font-size: 0.95rem;
-    }
-    .subscribe {
-      margin-top: 0.75rem;
-      font-size: 0.875rem;
-    }
-    .subscribe-label {
-      margin: 0 0 0.35rem;
-      color: #444;
-    }
-    .links {
+    .toolbar {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.5rem 1rem;
+      gap: 0.35rem 0.75rem;
       justify-content: center;
       align-items: center;
+      font-size: 0.875rem;
+      color: #444;
     }
-    .links a {
+    .toolbar a {
       color: #1a73e8;
       text-decoration: none;
     }
-    .links a:hover { text-decoration: underline; }
-    .legend {
-      margin-top: 0.65rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem 1.25rem;
-      justify-content: center;
-      font-size: 0.8125rem;
-      color: #555;
-    }
-    .legend-item {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-    .dot {
-      width: 0.75rem;
-      height: 0.75rem;
-      border-radius: 2px;
-      flex-shrink: 0;
-    }
-    .dot-bachata { background: #b1365f; }
-    .dot-kizomba { background: #2952a3; }
-    .dot-zouk { background: #1b887a; }
-    .feedback {
-      margin-top: 0.65rem;
-      font-size: 0.875rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem 1rem;
-      justify-content: center;
+    .toolbar a:hover { text-decoration: underline; }
+    .sep {
+      color: #ccc;
+      user-select: none;
     }
     iframe {
       border: 0;
       display: block;
       width: 100%;
-      height: calc(100vh - 148px);
+      height: calc(100vh - 88px);
       min-height: 480px;
       background: #fff;
     }
@@ -91,38 +54,20 @@
 </head>
 <body>
   <header>
-    <h1>Танцы Минск</h1>
-    <p>Bachata · Kizomba · Zouk — вечеринки, open-air, протанцовки, классы</p>
-
-    <div class="subscribe">
-      <p class="subscribe-label">Подписаться на календарь в Google Calendar:</p>
-      <div class="links">
-        <a href="https://calendar.google.com/calendar/u/0?cid=M2I3NWE2NjhiOTdjZjAxZjgxZmE1Mjc5N2UyZGFkOTEzZTgxMDkxNDMzNzU0OGY4OTQ1ZWVmMGVhNjVmYzAwN0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t">
-          Бачата
-        </a>
-        <a href="https://calendar.google.com/calendar/u/0?cid=MjFjZDAxYjBjMzA1ZjNiOTQ0NGJkYjFkZTlkOWI2ZDhiMTZmMzEzNDhkYzRhMzAwOWM2YTlhZjY4ZWRmOThjN0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t">
-          Кизомба
-        </a>
-        <a href="https://calendar.google.com/calendar/u/0?cid=NDFmZGU5M2EwNjAyODM2MmUxNjY0MWE2Zjk2ZmNiZDYwN2Y1OTRiMmRlMWM0MmRjNzRmZjdmN2JiYzlhNjhiZEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t">
-          Зук
-        </a>
-      </div>
-    </div>
-
-    <div class="legend" aria-label="Цвета календарей">
-      <span class="legend-item"><span class="dot dot-bachata"></span> Бачата</span>
-      <span class="legend-item"><span class="dot dot-kizomba"></span> Кизомба</span>
-      <span class="legend-item"><span class="dot dot-zouk"></span> Зук</span>
-    </div>
-
-    <p class="feedback">
+    <h1>Bachata · Kizomba · Zouk — вечеринки, open-air, протанцовки, классы</h1>
+    <div class="toolbar">
+      <span>Подписаться на календарь в Google Calendar:</span>
+      <a href="https://calendar.google.com/calendar/u/0?cid=M2I3NWE2NjhiOTdjZjAxZjgxZmE1Mjc5N2UyZGFkOTEzZTgxMDkxNDMzNzU0OGY4OTQ1ZWVmMGVhNjVmYzAwN0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t">Бачата</a>
+      <a href="https://calendar.google.com/calendar/u/0?cid=MjFjZDAxYjBjMzA1ZjNiOTQ0NGJkYjFkZTlkOWI2ZDhiMTZmMzEzNDhkYzRhMzAwOWM2YTlhZjY4ZWRmOThjN0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t">Кизомба</a>
+      <a href="https://calendar.google.com/calendar/u/0?cid=NDFmZGU5M2EwNjAyODM2MmUxNjY0MWE2Zjk2ZmNiZDYwN2Y1OTRiMmRlMWM0MmRjNzRmZjdmN2JiYzlhNjhiZEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t">Зук</a>
+      <span class="sep">·</span>
       <a href="https://github.com/KondratyonokNikita/dance-bot">GitHub</a>
-      <a href="https://github.com/KondratyonokNikita/dance-bot/issues">Фидбэк / сообщить об ошибке</a>
-    </p>
+      <a href="https://github.com/KondratyonokNikita/dance-bot/issues">Фидбэк</a>
+    </div>
   </header>
   <iframe
     src="https://calendar.google.com/calendar/embed?src=3b75a668b97cf01f81fa52797e2dad913e810914337548f8945eef0ea65fc007%40group.calendar.google.com&color=%23B1365F&src=21cd01b0c305f3b9444bdb1de9d9b6d8b16f31348dc4a3009c6a9af68edf98c7%40group.calendar.google.com&color=%232952A3&src=41fde93a06028362e16641a6f96fcbd607f594b2de1c42dc74ff7f7bbc9a68bd%40group.calendar.google.com&color=%231B887A&ctz=Europe%2FMinsk&mode=WEEK&showCalendars=1"
-    title="Танцы Минск">
+    title="Bachata · Kizomba · Zouk">
   </iframe>
 </body>
 </html>
