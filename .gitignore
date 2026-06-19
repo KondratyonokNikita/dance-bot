@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+data/
+*.session
+*.session-journal
+.DS_Store
+.claude/.ast-index-skip

@@ -1,0 +1,23 @@
+[project]
+name = "dance-bot"
+version = "0.1.0"
+description = "Telegram dance-event aggregator"
+requires-python = ">=3.11"
+dependencies = [
+    "structlog>=24.0",
+    "telethon>=1.36",
+    "pydantic-settings>=2.0",
+    "pydantic>=2.0",
+    "google-api-python-client>=2.0",
+    "google-auth-oauthlib>=1.2",
+]
+
+[project.scripts]
+dance-bot = "dance_bot.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dance_bot"]
