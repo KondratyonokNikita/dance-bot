@@ -7,7 +7,7 @@ from pathlib import Path
 
 from typing import Literal
 
-from dance_bot.extractor import Event
+from dance_bot.extractor import Cancellation, Event
 
 EventType = Literal["party", "protanzovka", "openair", "dance_class"]
 DanceType = Literal["bachata", "kizomba", "zouk"]
@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     parsed_message_id INTEGER NOT NULL REFERENCES parsed_messages(id),
     raw_message_id INTEGER NOT NULL REFERENCES raw_messages(id),
+    channel TEXT NOT NULL,
     event_type TEXT NOT NULL,
     dances TEXT NOT NULL,
     date TEXT,
@@ -48,8 +49,16 @@ CREATE TABLE IF NOT EXISTS events (
     location TEXT,
     price TEXT,
     dedup_key TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'active',
+    cancellation_raw_message_id INTEGER REFERENCES raw_messages(id),
     created_at TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_events_channel_date
+    ON events (channel, date, event_type, status);
+
+CREATE INDEX IF NOT EXISTS idx_events_dedup_status
+    ON events (dedup_key, status);
 
 CREATE INDEX IF NOT EXISTS idx_raw_filter_unparsed
     ON raw_messages (filter_passed)
@@ -73,6 +82,17 @@ def event_dedup_key(event: Event) -> str:
         f"{(event.location or '').strip().lower()}"
     )
     return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+def cancellation_dedup_key(cancellation: Cancellation) -> str:
+    event = Event(
+        event_type=cancellation.event_type,
+        dances=cancellation.dances,
+        date=cancellation.date,
+        time_start=cancellation.time_start,
+        location=cancellation.location,
+    )
+    return event_dedup_key(event)
 
 
 def calendar_sink(dance: DanceType) -> str:
@@ -104,11 +124,13 @@ class ParsedMessageRow:
     message_date: datetime
     message: str | None
     source_url: str
+    channel: str
 
 
 @dataclass(frozen=True)
 class EventRow:
     id: int
+    channel: str
     event_type: EventType
     dances: list[DanceType]
     date: str | None
@@ -125,6 +147,8 @@ class EventRow:
 class CalendarSyncRow:
     event: EventRow
     dance: DanceType
+    cancellation_source_url: str | None = None
+    cancellation_message: str | None = None
 
 
 class Database:
@@ -132,149 +156,10 @@ class Database:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(path)
         self._conn.row_factory = sqlite3.Row
-        if self._is_legacy_schema():
-            self._migrate_from_legacy()
-        else:
-            self._conn.executescript(_SCHEMA)
+        self._conn.executescript(_SCHEMA)
 
     def close(self) -> None:
         self._conn.close()
-
-    def _table_columns(self, table: str) -> set[str]:
-        return {
-            row["name"]
-            for row in self._conn.execute(f"PRAGMA table_info({table})")
-        }
-
-    def _is_legacy_schema(self) -> bool:
-        tables = {
-            row[0]
-            for row in self._conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
-        }
-        if "raw_messages_legacy" in tables:
-            return False
-        if "raw_messages" not in tables:
-            return False
-        return "id" not in self._table_columns("raw_messages")
-
-    def _migrate_from_legacy(self) -> None:
-        from dance_bot.filters import matches
-
-        tables = {
-            row[0]
-            for row in self._conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
-        }
-        has_legacy_events = "events" in tables
-
-        self._conn.execute("ALTER TABLE raw_messages RENAME TO raw_messages_legacy")
-        if has_legacy_events:
-            self._conn.execute("ALTER TABLE events RENAME TO events_legacy")
-        self._conn.executescript(_SCHEMA)
-
-        legacy_rows = self._conn.execute(
-            """
-            SELECT channel, message_id, message_date, text, source_url, fetched_at,
-                   parsed_at, llm_raw_output
-            FROM raw_messages_legacy
-            """
-        ).fetchall()
-
-        for row in legacy_rows:
-            text = row["text"]
-            filter_passed = 1 if matches(text) else 0
-            cursor = self._conn.execute(
-                """
-                INSERT INTO raw_messages
-                    (channel, message_id, message, message_date, source_url,
-                     fetch_date, filter_passed)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    row["channel"],
-                    row["message_id"],
-                    text,
-                    row["message_date"],
-                    row["source_url"] or "",
-                    row["fetched_at"],
-                    filter_passed,
-                ),
-            )
-            raw_id = cursor.lastrowid
-
-            if row["parsed_at"] and row["llm_raw_output"]:
-                pm_cursor = self._conn.execute(
-                    """
-                    INSERT INTO parsed_messages
-                        (raw_message_id, parsed_message, parse_date)
-                    VALUES (?, ?, ?)
-                    """,
-                    (raw_id, row["llm_raw_output"], row["parsed_at"]),
-                )
-                parsed_id = pm_cursor.lastrowid
-
-                if has_legacy_events:
-                    legacy_events = self._conn.execute(
-                        """
-                        SELECT event_type, dances, date, time_start, time_end, location,
-                               price, extracted_at
-                        FROM events_legacy
-                        WHERE channel = ? AND message_id = ?
-                        """,
-                        (row["channel"], row["message_id"]),
-                    ).fetchall()
-                else:
-                    legacy_events = []
-
-                for event_row in legacy_events:
-                    event = Event(
-                        event_type=event_row["event_type"],
-                        dances=json.loads(event_row["dances"]),
-                        date=event_row["date"],
-                        time_start=event_row["time_start"],
-                        time_end=event_row["time_end"],
-                        location=event_row["location"],
-                        price=event_row["price"],
-                    )
-                    self._conn.execute(
-                        """
-                        INSERT OR IGNORE INTO events
-                            (parsed_message_id, raw_message_id, event_type, dances,
-                             date, time_start, time_end, location, price,
-                             dedup_key, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            parsed_id,
-                            raw_id,
-                            event.event_type,
-                            json.dumps(event.dances, ensure_ascii=False),
-                            event.date,
-                            event.time_start,
-                            event.time_end,
-                            event.location,
-                            event.price,
-                            event_dedup_key(event),
-                            event_row["extracted_at"],
-                        ),
-                    )
-
-                if legacy_events:
-                    self._conn.execute(
-                        """
-                        UPDATE parsed_messages
-                        SET events_extracted_at = ?
-                        WHERE id = ?
-                        """,
-                        (row["parsed_at"], parsed_id),
-                    )
-
-        self._conn.execute("DROP TABLE IF EXISTS raw_messages_legacy")
-        self._conn.execute("DROP TABLE IF EXISTS events_legacy")
-        self._conn.commit()
 
     def get_last_raw_message(
         self, channel: str
@@ -366,7 +251,7 @@ class Database:
         rows = self._conn.execute(
             """
             SELECT p.id, p.raw_message_id, p.parsed_message,
-                   r.message_date, r.message, r.source_url
+                   r.message_date, r.message, r.source_url, r.channel
             FROM parsed_messages p
             JOIN raw_messages r ON r.id = p.raw_message_id
             WHERE p.events_extracted_at IS NULL
@@ -381,6 +266,7 @@ class Database:
                 message_date=datetime.fromisoformat(row["message_date"]),
                 message=row["message"],
                 source_url=row["source_url"],
+                channel=row["channel"],
             )
             for row in rows
         ]
@@ -390,19 +276,22 @@ class Database:
         *,
         parsed_message_id: int,
         raw_message_id: int,
+        channel: str,
         event: Event,
     ) -> str:
         now = datetime.now(timezone.utc).isoformat()
         cursor = self._conn.execute(
             """
             INSERT OR IGNORE INTO events
-                (parsed_message_id, raw_message_id, event_type, dances, date,
-                 time_start, time_end, location, price, dedup_key, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (parsed_message_id, raw_message_id, channel, event_type, dances,
+                 date, time_start, time_end, location, price, dedup_key, status,
+                 created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
             """,
             (
                 parsed_message_id,
                 raw_message_id,
+                channel,
                 event.event_type,
                 json.dumps(event.dances, ensure_ascii=False),
                 event.date,
@@ -416,6 +305,74 @@ class Database:
         )
         self._conn.commit()
         return "inserted" if cursor.rowcount == 1 else "skipped"
+
+    def find_active_events_for_cancellation(
+        self, cancellation: Cancellation, *, channel: str
+    ) -> list[int]:
+        rows = self._conn.execute(
+            """
+            SELECT e.id, e.dances, e.location, e.time_start, e.dedup_key
+            FROM events e
+            WHERE e.status = 'active'
+              AND e.date = ?
+              AND e.event_type = ?
+              AND e.channel = ?
+            """,
+            (cancellation.date, cancellation.event_type, channel),
+        ).fetchall()
+        if not rows:
+            return []
+
+        candidates = [dict(row) for row in rows]
+
+        if cancellation.time_start and cancellation.location:
+            key = cancellation_dedup_key(cancellation)
+            exact = [row["id"] for row in candidates if row["dedup_key"] == key]
+            if len(exact) == 1:
+                return exact
+            if len(exact) > 1:
+                candidates = [row for row in candidates if row["id"] in exact]
+
+        if cancellation.time_start:
+            candidates = [
+                row
+                for row in candidates
+                if row["time_start"] == cancellation.time_start
+            ]
+
+        if cancellation.location:
+            location = cancellation.location.strip().lower()
+            candidates = [
+                row
+                for row in candidates
+                if (row["location"] or "").strip().lower() == location
+            ]
+
+        if cancellation.dances:
+            cancel_dances = set(cancellation.dances)
+            filtered: list[dict] = []
+            for row in candidates:
+                event_dances = json.loads(row["dances"])
+                effective = set(target_dances(event_dances))
+                if effective & cancel_dances:
+                    filtered.append(row)
+            candidates = filtered
+
+        return [row["id"] for row in candidates]
+
+    def cancel_event(
+        self, event_id: int, *, cancellation_raw_message_id: int
+    ) -> None:
+        self._conn.execute(
+            """
+            UPDATE events
+            SET status = 'cancelled',
+                cancellation_raw_message_id = ?
+            WHERE id = ? AND status = 'active'
+            """,
+            (cancellation_raw_message_id, event_id),
+        )
+        self._conn.commit()
 
     def mark_events_extracted(self, parsed_message_id: int) -> None:
         now = datetime.now(timezone.utc).isoformat()
@@ -432,10 +389,12 @@ class Database:
     def list_unsynced_for_calendar(self) -> list[CalendarSyncRow]:
         rows = self._conn.execute(
             """
-            SELECT e.id, e.event_type, e.dances, e.date, e.time_start, e.time_end,
-                   e.location, e.price, e.dedup_key, r.source_url, r.message
+            SELECT e.id, e.channel, e.event_type, e.dances, e.date, e.time_start,
+                   e.time_end, e.location, e.price, e.dedup_key, r.source_url,
+                   r.message
             FROM events e
             JOIN raw_messages r ON r.id = e.raw_message_id
+            WHERE e.status = 'active'
             ORDER BY e.date ASC, e.time_start ASC, e.id ASC
             """
         ).fetchall()
@@ -453,6 +412,7 @@ class Database:
         for row in rows:
             event = EventRow(
                 id=row["id"],
+                channel=row["channel"],
                 event_type=row["event_type"],
                 dances=json.loads(row["dances"]),
                 date=row["date"],
@@ -467,6 +427,57 @@ class Database:
             for dance in target_dances(event.dances):
                 if (event.id, calendar_sink(dance)) not in synced:
                     result.append(CalendarSyncRow(event=event, dance=dance))
+        return result
+
+    def list_cancelled_unsynced(self) -> list[CalendarSyncRow]:
+        rows = self._conn.execute(
+            """
+            SELECT e.id, e.channel, e.event_type, e.dances, e.date, e.time_start,
+                   e.time_end, e.location, e.price, e.dedup_key,
+                   r.source_url, r.message,
+                   cr.source_url AS cancellation_source_url,
+                   cr.message AS cancellation_message,
+                   sl.sink
+            FROM events e
+            JOIN raw_messages r ON r.id = e.raw_message_id
+            JOIN raw_messages cr ON cr.id = e.cancellation_raw_message_id
+            JOIN sync_log sl ON sl.event_id = e.id
+            WHERE e.status = 'cancelled'
+              AND sl.status != 'cancelled'
+              AND sl.sink LIKE ?
+            ORDER BY e.date ASC, e.time_start ASC, e.id ASC, sl.sink ASC
+            """,
+            (f"{CALENDAR_SINK_PREFIX}:%",),
+        ).fetchall()
+
+        result: list[CalendarSyncRow] = []
+        for row in rows:
+            sink = row["sink"]
+            dance = sink.split(":", 1)[1]
+            if dance not in ("bachata", "kizomba", "zouk"):
+                continue
+            event = EventRow(
+                id=row["id"],
+                channel=row["channel"],
+                event_type=row["event_type"],
+                dances=json.loads(row["dances"]),
+                date=row["date"],
+                time_start=row["time_start"],
+                time_end=row["time_end"],
+                location=row["location"],
+                price=row["price"],
+                dedup_key=row["dedup_key"],
+                source_url=row["source_url"],
+                message=row["message"],
+            )
+            result.append(
+                CalendarSyncRow(
+                    event=event,
+                    dance=dance,
+                    cancellation_source_url=row["cancellation_source_url"],
+                    cancellation_message=row["cancellation_message"],
+                )
+            )
         return result
 
     def record_sync(
@@ -485,6 +496,18 @@ class Database:
             VALUES (?, ?, ?, ?, ?)
             """,
             (event_id, sink, external_id, status, now),
+        )
+        self._conn.commit()
+
+    def mark_sync_cancelled(self, event_id: int, sink: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        self._conn.execute(
+            """
+            UPDATE sync_log
+            SET status = 'cancelled', synced_at = ?
+            WHERE event_id = ? AND sink = ?
+            """,
+            (now, event_id, sink),
         )
         self._conn.commit()
 

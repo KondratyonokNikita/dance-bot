@@ -10,8 +10,8 @@ fetch_messages → parse_messages → parse_events → sync_calendar
 |------|--------|------------|
 | 1 | `fetch_messages.py` | Telegram → `raw_messages` (инкрементально, keyword-фильтр) |
 | 2 | `parse_messages.py` | LLM → `parsed_messages` (только новые, прошедшие фильтр) |
-| 3 | `parse_events.py` | JSON → `events` (с дедупом по `dedup_key`; без `time_start` не пишется) |
-| 4 | `sync_calendar.py` | `events` → Google Calendar (через `sync_log`) |
+| 3 | `parse_events.py` | JSON → `events` (insert) + отмены (`cancellations` → `status=cancelled`) |
+| 4 | `sync_calendar.py` | Отмены в Google Calendar (`(ОТМЕНА)` в title) → insert новых `active` |
 
 ## База данных
 
@@ -21,7 +21,7 @@ fetch_messages → parse_messages → parse_events → sync_calendar
 |---------|------------|
 | `raw_messages` | Сырые посты из Telegram + `filter_passed` |
 | `parsed_messages` | Сырой JSON-ответ LLM по каждому посту |
-| `events` | Структурированные события с `dedup_key` |
+| `events` | Структурированные события с `channel`, `dedup_key`, `status` (`active` / `cancelled`), `cancellation_raw_message_id` |
 | `sync_log` | Что и когда отправлено в календарь |
 
 ## Google Calendar
@@ -41,7 +41,8 @@ fetch_messages → parse_messages → parse_events → sync_calendar
 - Mixed events дублируются во все соответствующие календари
 - Дедуп: `dedup_key = SHA256(date|time_start|location)` как `event.id` (уникален внутри календаря)
 - `sync_log.sink`: `google_calendar:bachata` / `kizomba` / `zouk`
-- Удалённые в UI события (`cancelled`) восстанавливаются при следующей синхронизации
+- Удалённые в UI события (`cancelled`) восстанавливаются при следующей синхронизации **только для `active`**
+- **Отмена:** LLM возвращает `cancellations`; событие помечается `cancelled` в БД; в Google Calendar title → `(ОТМЕНА) …`, в description добавляется текст и ссылка на пост об отмене
 - `clear_calendar(db)` — удаляет все активные события из всех трёх календарей и очищает `sync_log`
 
 ## Конфигурация

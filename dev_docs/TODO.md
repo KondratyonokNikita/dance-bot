@@ -40,7 +40,7 @@
 
 - [x] **Справочник адресов в промпте** — проанализированы `location` в `events`, справочник в [`dev_docs/locations.md`](locations.md), таблица и правила нормализации в [`prompts/extract_event.md`](../prompts/extract_event.md).
 
-- [ ] **Обработка отмены мероприятий** — иногда в каналах приходят посты об отмене. Распознавать их (keyword-фильтр +/или LLM) и снимать/отменять соответствующие события в `events`, Google Calendar и `sync_log`.
+- [x] **Обработка отмены мероприятий** — LLM → `cancellations`, каскадный матчинг, `(ОТМЕНА)` в Google Calendar. План: [`.claude/plans/event-cancellations.md`](../.claude/plans/event-cancellations.md).
 
 - [ ] **Обновление событий в календаре** (`events().update`) — при изменении времени, места или цены в посте обновлять запись в календаре. Сейчас только insert и restore cancelled.
 

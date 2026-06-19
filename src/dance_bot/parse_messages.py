@@ -28,6 +28,8 @@ def parse_messages(db: Database) -> None:
         print()
         print("Parsed:")
         print(parsed.model_dump_json(indent=2))
+        if parsed.cancellations:
+            print(f"Cancellations: {len(parsed.cancellations)}")
 
         log.info(
             "Message parsed",
@@ -37,4 +39,5 @@ def parse_messages(db: Database) -> None:
             parsed_message_id=parsed_message_id,
             source_url=row.source_url,
             events=len(parsed.events),
+            cancellations=len(parsed.cancellations),
         )

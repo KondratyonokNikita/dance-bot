@@ -12,10 +12,13 @@ _SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 _MODEL = "claude-haiku-4-5"
 _TIMEOUT_SEC = 300
 
+EventType = Literal["party", "protanzovka", "openair", "dance_class"]
+DanceType = Literal["bachata", "kizomba", "zouk"]
+
 
 class Event(BaseModel):
-    event_type: Literal["party", "protanzovka", "openair", "dance_class"]
-    dances: list[Literal["bachata", "kizomba", "zouk"]] = []
+    event_type: EventType
+    dances: list[DanceType] = []
     date: Optional[str] = None
     time_start: Optional[str] = None
     time_end: Optional[str] = None
@@ -23,8 +26,18 @@ class Event(BaseModel):
     price: Optional[str] = None
 
 
+class Cancellation(BaseModel):
+    date: str
+    event_type: EventType
+    time_start: Optional[str] = None
+    time_end: Optional[str] = None
+    location: Optional[str] = None
+    dances: list[DanceType] = []
+
+
 class Extraction(BaseModel):
     events: list[Event]
+    cancellations: list[Cancellation] = []
 
 
 def extract(text: str, message_date: date, channel: str) -> tuple[Extraction, str]:
@@ -33,7 +46,8 @@ def extract(text: str, message_date: date, channel: str) -> tuple[Extraction, st
         f"Канал: {channel}\n"
         f"Дата публикации поста: {message_date.isoformat()}\n\n"
         f"Текст поста:\n{text}\n\n"
-        'Ответь ТОЛЬКО валидным JSON вида {"events": [...]} без markdown, без объяснений.'
+        'Ответь ТОЛЬКО валидным JSON вида {"events": [...], "cancellations": []} '
+        "без markdown, без объяснений."
     )
     result = subprocess.run(
         ["claude", "--print", "--model", _MODEL, "--output-format", "json", prompt],

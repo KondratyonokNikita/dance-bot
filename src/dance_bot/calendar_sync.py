@@ -12,6 +12,9 @@ from dance_bot.extractor import Event
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
+CANCEL_PREFIX = "(ОТМЕНА) "
+CANCEL_SOURCE_MARKER = "Источник отмены:"
+
 _DEFAULT_DURATION = timedelta(hours=2)
 
 _TYPE_LABELS = {
@@ -95,19 +98,73 @@ def _event_title(event: Event) -> str:
     return type_label
 
 
-def _event_description(
-    event: Event, source_url: str, raw_message: str | None
-) -> str:
+def _event_metadata_lines(event: Event) -> list[str]:
     lines = [f"Тип: {_TYPE_LABELS_RU[event.event_type]}"]
     if event.dances:
         dances = ", ".join(_DANCE_LABELS_RU[d] for d in event.dances)
         lines.append(f"Танцы: {dances}")
     if event.price:
         lines.append(f"Цена: {event.price}")
+    return lines
+
+
+def _event_description(
+    event: Event, source_url: str, raw_message: str | None
+) -> str:
+    lines = _event_metadata_lines(event)
     if raw_message:
         lines.extend(["", "—", "", raw_message])
     lines.extend(["", f"Источник: {source_url}"])
     return "\n".join(lines)
+
+
+def _extract_announcement_from_description(description: str) -> str | None:
+    if "\n—\n" not in description:
+        return None
+    _, rest = description.split("\n—\n", 1)
+    if CANCEL_SOURCE_MARKER in rest:
+        parts = rest.split("\n—\n", 1)
+        return parts[-1].strip() if parts else None
+    return rest.strip()
+
+
+def _event_description_with_cancellation(
+    event: Event,
+    source_url: str,
+    raw_message: str | None,
+    *,
+    cancellation_url: str,
+    cancellation_message: str | None,
+    existing_description: str | None = None,
+) -> str:
+    if existing_description and CANCEL_SOURCE_MARKER in existing_description:
+        return existing_description
+
+    if existing_description and "\n—\n" in existing_description:
+        meta = existing_description.split("\n—\n", 1)[0].rstrip()
+    else:
+        meta = "\n".join(_event_metadata_lines(event))
+
+    lines = [meta, "", "—", "Отмена:", ""]
+    if cancellation_message:
+        lines.append(cancellation_message)
+    lines.extend(["", f"{CANCEL_SOURCE_MARKER} {cancellation_url}"])
+
+    announcement = _extract_announcement_from_description(
+        existing_description or ""
+    )
+    if announcement:
+        lines.extend(["", "—", "", announcement])
+    elif raw_message:
+        lines.extend(["", "—", "", raw_message, "", f"Источник: {source_url}"])
+
+    return "\n".join(lines)
+
+
+def _cancelled_title(original: str) -> str:
+    if original.startswith(CANCEL_PREFIX):
+        return original
+    return f"{CANCEL_PREFIX}{original}"
 
 
 def _build_payload(
@@ -160,6 +217,8 @@ def insert_calendar_event(
     dedup_key: str,
     dance: str,
     raw_message: str | None = None,
+    *,
+    allow_restore: bool = True,
 ) -> Literal["inserted", "restored", "skipped"]:
     """Insert one event into the Google Calendar for a dance style."""
     if not event.date:
@@ -181,13 +240,60 @@ def insert_calendar_event(
             .get(calendarId=calendar_id, eventId=dedup_key)
             .execute()
         )
-        if existing.get("status") == "cancelled":
+        if allow_restore and existing.get("status") == "cancelled":
             payload["status"] = "confirmed"
             service.events().update(
                 calendarId=calendar_id, eventId=dedup_key, body=payload
             ).execute()
             return "restored"
         return "skipped"
+
+
+def mark_calendar_event_cancelled(
+    event: Event,
+    source_url: str,
+    dedup_key: str,
+    dance: str,
+    raw_message: str | None = None,
+    *,
+    cancellation_url: str,
+    cancellation_message: str | None,
+) -> Literal["updated", "skipped", "not_found"]:
+    service = _get_service()
+    calendar_id = _get_calendar_id(dance)
+
+    try:
+        existing = (
+            service.events()
+            .get(calendarId=calendar_id, eventId=dedup_key)
+            .execute()
+        )
+    except HttpError as e:
+        if e.resp.status in (404, 410):
+            return "not_found"
+        raise
+
+    summary = existing.get("summary", "")
+    description = existing.get("description", "")
+    if summary.startswith(CANCEL_PREFIX) and CANCEL_SOURCE_MARKER in description:
+        return "skipped"
+
+    updated = {
+        **existing,
+        "summary": _cancelled_title(summary),
+        "description": _event_description_with_cancellation(
+            event,
+            source_url,
+            raw_message,
+            cancellation_url=cancellation_url,
+            cancellation_message=cancellation_message,
+            existing_description=description or None,
+        ),
+    }
+    service.events().update(
+        calendarId=calendar_id, eventId=dedup_key, body=updated
+    ).execute()
+    return "updated"
 
 
 def _clear_calendar(dance: str) -> int:
