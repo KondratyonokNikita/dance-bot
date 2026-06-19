@@ -48,7 +48,9 @@ def sync_calendar(db: Database) -> None:
             )
             continue
 
-        result = insert_calendar_event(event, row.source_url, row.dedup_key)
+        result = insert_calendar_event(
+            event, row.source_url, row.dedup_key, row.message
+        )
         db.record_sync(
             event_id=row.id,
             sink=_SINK,

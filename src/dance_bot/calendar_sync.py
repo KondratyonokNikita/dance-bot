@@ -100,20 +100,26 @@ def _event_title(event: Event) -> str:
     return type_label
 
 
-def _event_description(event: Event, source_url: str) -> str:
+def _event_description(
+    event: Event, source_url: str, raw_message: str | None
+) -> str:
     lines = [f"Тип: {_TYPE_LABELS_RU[event.event_type]}"]
     if event.dances:
         dances = ", ".join(_DANCE_LABELS_RU[d] for d in event.dances)
         lines.append(f"Танцы: {dances}")
     if event.price:
         lines.append(f"Цена: {event.price}")
-    lines.append("")
-    lines.append(f"Источник: {source_url}")
+    if raw_message:
+        lines.extend(["", "—", "", raw_message])
+    lines.extend(["", f"Источник: {source_url}"])
     return "\n".join(lines)
 
 
 def _build_payload(
-    event: Event, source_url: str, dedup_key: str
+    event: Event,
+    source_url: str,
+    dedup_key: str,
+    raw_message: str | None = None,
 ) -> dict[str, Any]:
     settings = get_settings()
     tz = ZoneInfo(settings.timezone)
@@ -121,7 +127,7 @@ def _build_payload(
     payload: dict[str, Any] = {
         "id": dedup_key,
         "summary": _event_title(event),
-        "description": _event_description(event, source_url),
+        "description": _event_description(event, source_url, raw_message),
         "colorId": _COLOR_IDS[event.event_type],
     }
     if event.location:
@@ -155,7 +161,10 @@ def _build_payload(
 
 
 def insert_calendar_event(
-    event: Event, source_url: str, dedup_key: str
+    event: Event,
+    source_url: str,
+    dedup_key: str,
+    raw_message: str | None = None,
 ) -> Literal["inserted", "restored", "skipped"]:
     """Insert one event into Google Calendar."""
     if not event.date:
@@ -163,7 +172,7 @@ def insert_calendar_event(
 
     service = _get_service()
     calendar_id = _get_calendar_id()
-    payload = _build_payload(event, source_url, dedup_key)
+    payload = _build_payload(event, source_url, dedup_key, raw_message)
 
     try:
         service.events().insert(calendarId=calendar_id, body=payload).execute()
@@ -206,10 +215,17 @@ def clear_all_calendar_events() -> int:
             .execute()
         )
         for item in result.get("items", []):
-            service.events().delete(
-                calendarId=calendar_id, eventId=item["id"]
-            ).execute()
-            deleted += 1
+            if item.get("status") == "cancelled":
+                continue
+            try:
+                service.events().delete(
+                    calendarId=calendar_id, eventId=item["id"]
+                ).execute()
+                deleted += 1
+            except HttpError as e:
+                if e.resp.status == 410:
+                    continue
+                raise
 
         page_token = result.get("nextPageToken")
         if not page_token:

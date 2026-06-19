@@ -104,6 +104,7 @@ class EventRow:
     price: str | None
     dedup_key: str
     source_url: str
+    message: str | None
 
 
 class Database:
@@ -414,7 +415,7 @@ class Database:
         rows = self._conn.execute(
             """
             SELECT e.id, e.event_type, e.dances, e.date, e.time_start, e.time_end,
-                   e.location, e.price, e.dedup_key, r.source_url
+                   e.location, e.price, e.dedup_key, r.source_url, r.message
             FROM events e
             JOIN raw_messages r ON r.id = e.raw_message_id
             LEFT JOIN sync_log s ON s.event_id = e.id AND s.sink = ?
@@ -435,6 +436,7 @@ class Database:
                 price=row["price"],
                 dedup_key=row["dedup_key"],
                 source_url=row["source_url"],
+                message=row["message"],
             )
             for row in rows
         ]
