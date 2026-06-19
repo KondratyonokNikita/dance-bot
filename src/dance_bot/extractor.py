@@ -46,6 +46,10 @@ def extract(text: str, message_date: date) -> tuple[Extraction, str]:
     return parsed, raw
 
 
+def parse_extraction(raw: str) -> Extraction:
+    return Extraction.model_validate_json(_strip_fences(raw))
+
+
 def _strip_fences(s: str) -> str:
     s = s.strip()
     if s.startswith("```"):

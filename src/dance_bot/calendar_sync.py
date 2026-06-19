@@ -1,6 +1,5 @@
-import hashlib
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from google.auth.transport.requests import Request
@@ -14,6 +13,7 @@ from dance_bot.extractor import Event
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 _DEFAULT_DURATION = timedelta(hours=2)
+_SINK = "google_calendar"
 
 _TYPE_LABELS = {
     "party": "Party",
@@ -22,10 +22,30 @@ _TYPE_LABELS = {
     "dance_class": "Класс",
 }
 
+_TYPE_LABELS_RU = {
+    "party": "вечеринка",
+    "protanzovka": "протанцовка",
+    "openair": "open-air",
+    "dance_class": "класс",
+}
+
 _DANCE_LABELS = {
     "bachata": "Bachata",
     "kizomba": "Kizomba",
     "zouk": "Zouk",
+}
+
+_DANCE_LABELS_RU = {
+    "bachata": "бачата",
+    "kizomba": "кизомба",
+    "zouk": "зук",
+}
+
+_COLOR_IDS: dict[str, str] = {
+    "party": "11",
+    "openair": "10",
+    "protanzovka": "7",
+    "dance_class": "9",
 }
 
 _service: Any | None = None
@@ -80,23 +100,29 @@ def _event_title(event: Event) -> str:
     return type_label
 
 
-def _event_id(event: Event) -> str:
-    key = f"{event.date}|{event.time_start}|{(event.location or '').strip().lower()}"
-    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+def _event_description(event: Event, source_url: str) -> str:
+    lines = [f"Тип: {_TYPE_LABELS_RU[event.event_type]}"]
+    if event.dances:
+        dances = ", ".join(_DANCE_LABELS_RU[d] for d in event.dances)
+        lines.append(f"Танцы: {dances}")
+    if event.price:
+        lines.append(f"Цена: {event.price}")
+    lines.append("")
+    lines.append(f"Источник: {source_url}")
+    return "\n".join(lines)
 
 
-def _build_payload(event: Event, source_url: str) -> dict[str, Any]:
+def _build_payload(
+    event: Event, source_url: str, dedup_key: str
+) -> dict[str, Any]:
     settings = get_settings()
     tz = ZoneInfo(settings.timezone)
 
-    description_lines = [f"Источник: {source_url}"]
-    if event.price:
-        description_lines.append(f"Цена: {event.price}")
-
     payload: dict[str, Any] = {
-        "id": _event_id(event),
+        "id": dedup_key,
         "summary": _event_title(event),
-        "description": "\n".join(description_lines),
+        "description": _event_description(event, source_url),
+        "colorId": _COLOR_IDS[event.event_type],
     }
     if event.location:
         payload["location"] = event.location
@@ -113,8 +139,14 @@ def _build_payload(event: Event, source_url: str) -> dict[str, Any]:
                 end_dt += timedelta(days=1)
         else:
             end_dt = start_dt + _DEFAULT_DURATION
-        payload["start"] = {"dateTime": start_dt.isoformat(), "timeZone": settings.timezone}
-        payload["end"] = {"dateTime": end_dt.isoformat(), "timeZone": settings.timezone}
+        payload["start"] = {
+            "dateTime": start_dt.isoformat(),
+            "timeZone": settings.timezone,
+        }
+        payload["end"] = {
+            "dateTime": end_dt.isoformat(),
+            "timeZone": settings.timezone,
+        }
     else:
         payload["start"] = {"date": event.date}
         payload["end"] = {"date": event.date}
@@ -122,19 +154,33 @@ def _build_payload(event: Event, source_url: str) -> dict[str, Any]:
     return payload
 
 
-def sync(event: Event, source_url: str) -> str:
-    """Upsert one event into the calendar. Returns "inserted" or "skipped"."""
+def insert_calendar_event(
+    event: Event, source_url: str, dedup_key: str
+) -> Literal["inserted", "restored", "skipped"]:
+    """Insert one event into Google Calendar."""
     if not event.date:
         return "skipped"
 
     service = _get_service()
     calendar_id = _get_calendar_id()
-    payload = _build_payload(event, source_url)
+    payload = _build_payload(event, source_url, dedup_key)
 
     try:
         service.events().insert(calendarId=calendar_id, body=payload).execute()
         return "inserted"
     except HttpError as e:
-        if e.resp.status == 409:
-            return "skipped"
-        raise
+        if e.resp.status != 409:
+            raise
+
+        existing = (
+            service.events()
+            .get(calendarId=calendar_id, eventId=dedup_key)
+            .execute()
+        )
+        if existing.get("status") == "cancelled":
+            payload["status"] = "confirmed"
+            service.events().update(
+                calendarId=calendar_id, eventId=dedup_key, body=payload
+            ).execute()
+            return "restored"
+        return "skipped"

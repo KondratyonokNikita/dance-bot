@@ -1,14 +1,15 @@
 # dance-bot
 
-Агрегатор анонсов социальных танцев из Telegram-каналов. Парсит сообщения через LLM, складывает структурированные события в JSONL-лог.
+Агрегатор анонсов социальных танцев из Telegram-каналов (Минск). Скачивает посты, извлекает события через LLM, сохраняет в SQLite и синхронизирует с Google Calendar.
 
-Подробный план — в `.claude/plans/mvp.md`.
+Открытые задачи — в [TODO.md](TODO.md).
 
 ## Требования
 
-- **macOS** (запуск под `launchd`; на Linux/Windows тоже заработает, но автозапуск надо адаптировать)
-- **Python 3.11+** — поставится автоматически через `uv`, отдельно ставить не нужно
-- **[uv](https://docs.astral.sh/uv/)** — менеджер пакетов и виртуальных окружений
+- **macOS** (для автозапуска через `launchd`; на Linux/Windows тоже работает, автозапуск надо адаптировать)
+- **Python 3.11+** — ставится автоматически через `uv`
+- **[uv](https://docs.astral.sh/uv/)** — менеджер пакетов
+- **`claude` CLI** — LLM-парсинг через подписку Claude Code (`claude-haiku-4-5`)
 
 ### Установка uv
 
@@ -16,30 +17,24 @@
 brew install uv
 ```
 
-или официальным инсталлером:
+или:
 
 ```sh
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-## Установка зависимостей
-
-Из корня проекта:
+## Установка
 
 ```sh
 uv sync
 ```
 
-Команда создаст `.venv/`, поставит нужную версию Python и зависимости из `pyproject.toml`.
+## Настройка
 
-## Первый вход в Telegram
+### Telegram
 
-Перед первым запуском бота нужно один раз авторизовать Telethon в твоём Telegram-аккаунте.
-
-1. Зайти на [my.telegram.org/apps](https://my.telegram.org/apps), залогиниться по номеру.
-2. Создать приложение (App title: `dance-bot`, Platform: Desktop, остальное по умолчанию).
-3. Скопировать `api_id` (число) и `api_hash` (строка).
-4. Заполнить `.env` в корне проекта:
+1. Создать приложение на [my.telegram.org/apps](https://my.telegram.org/apps).
+2. Заполнить `.env`:
 
    ```
    TELEGRAM_API_ID=12345
@@ -47,41 +42,24 @@ uv sync
    TELEGRAM_PHONE=+375291234567
    ```
 
-5. Запустить интерактивный логин:
+3. Авторизоваться:
 
    ```sh
    uv run python scripts/login.py
    ```
 
-   Telegram пришлёт код подтверждения в само приложение Telegram (если ты залогинен где-то) или SMS. Введи код в терминале. Если включена 2FA — введи cloud password.
+Сессия сохраняется в `data/bot.session` (в `.gitignore`).
 
-После успешного входа создаётся файл `data/bot.session` — все последующие запуски бота автоматические, ничего вводить не надо.
+### Google Calendar
 
-> `data/bot.session` = полный доступ к аккаунту. Файл уже в `.gitignore`, никуда не загружай.
-
-## Подключение Google Calendar
-
-Бот пишет извлечённые события в отдельный календарь «Танцы Минск» твоего Google-аккаунта. Настройка — один раз.
-
-1. Зайти на [console.cloud.google.com](https://console.cloud.google.com), создать проект (например, `dance-bot`).
-2. `APIs & Services` → `Library` → включить **Google Calendar API**.
-3. `APIs & Services` → `OAuth consent screen`:
-   - User type: `External`
-   - App name: `dance-bot`, email — твой
-   - Test users: добавить свой Google-аккаунт
-4. `APIs & Services` → `Credentials` → `Create Credentials` → `OAuth client ID`:
-   - Application type: `Desktop app`
-   - Скачать JSON и положить как `data/google_credentials.json`
-5. В [calendar.google.com](https://calendar.google.com) создать отдельный календарь с названием **«Танцы Минск»** (или поменяй `google_calendar_name` в `config.py`).
-6. Запустить интерактивный логин:
+1. Создать проект на [console.cloud.google.com](https://console.cloud.google.com), включить **Google Calendar API**.
+2. OAuth consent screen (External) + Desktop OAuth client → скачать JSON как `data/google_credentials.json`.
+3. Создать календарь **«Танцы Минск»** на [calendar.google.com](https://calendar.google.com) (или поменять `google_calendar_name` в `config.py`).
+4. Авторизоваться:
 
    ```sh
    uv run python scripts/google_login.py
    ```
-
-   Откроется браузер, дашь согласие. В `data/google_token.json` сохранится refresh-token.
-
-После этого бот пишет события в календарь автоматически. Дедуп по `(дата, время начала, место)` — повторный запуск не задублирует событие.
 
 ## Запуск
 
@@ -89,25 +67,72 @@ uv sync
 uv run dance-bot
 ```
 
-Ожидаемый вывод:
+## Пайплайн
 
 ```
-2026-06-19 09:41:15 [info     ] Starting dance-bot
+fetch_messages → parse_messages → parse_events → sync_calendar
 ```
+
+| Этап | Модуль | Что делает |
+|------|--------|------------|
+| 1 | `fetch_messages.py` | Telegram → `raw_messages` (инкрементально, keyword-фильтр) |
+| 2 | `parse_messages.py` | LLM → `parsed_messages` (только новые, прошедшие фильтр) |
+| 3 | `parse_events.py` | JSON → `events` (с дедупом по `dedup_key`) |
+| 4 | `sync_calendar.py` | `events` → Google Calendar (через `sync_log`) |
+
+Каждый этап идемпотентен — повторный запуск обрабатывает только новые данные.
+
+## База данных
+
+Файл `data/events.db` (SQLite):
+
+| Таблица | Назначение |
+|---------|------------|
+| `raw_messages` | Сырые посты из Telegram + `filter_passed` |
+| `parsed_messages` | Сырой JSON-ответ LLM по каждому посту |
+| `events` | Структурированные события с `dedup_key` |
+| `sync_log` | Что и когда отправлено в календарь |
+
+## Google Calendar
+
+- Календарь: **«Танцы Минск»**
+- Title: `Bachata / Kizomba — Party`
+- Цвета: party — красный, open-air — зелёный, протанцовка — бирюзовый, класс — синий
+- Дедуп: `dedup_key = SHA256(date|time_start|location)` как `event.id`
+- Удалённые в UI события (`cancelled`) восстанавливаются при следующей синхронизации
+
+## Конфигурация
+
+Основные параметры в `src/dance_bot/config.py`:
+
+| Параметр | По умолчанию |
+|----------|--------------|
+| `telegram_channels` | `kredo_dance`, `KIZonEVERYone` |
+| `history_hours` | `24` (глубина при первой загрузке канала) |
+| `google_calendar_name` | `Танцы Минск` |
+| `timezone` | `Europe/Minsk` |
 
 ## Структура проекта
 
 ```
 dance-bot/
-  pyproject.toml        # зависимости и entry-point
-  .env                  # секреты Telegram API (gitignored)
+  pyproject.toml
+  .env                          # секреты (gitignored)
+  prompts/
+    extract_event.md            # промпт для LLM
   src/dance_bot/
-    main.py             # точка входа
-    config.py           # pydantic-settings, чтение .env
-    calendar_sync.py    # запись событий в Google Calendar
+    main.py                     # оркестратор
+    config.py
+    db.py                       # SQLite
+    fetch_messages.py
+    parse_messages.py
+    parse_events.py
+    sync_calendar.py
+    calendar_sync.py            # Google Calendar API
+    extractor.py                # LLM через claude CLI
+    filters.py                  # keyword-фильтр
   scripts/
-    login.py            # интерактивный первый вход в Telegram
-    google_login.py     # OAuth-флоу для Google Calendar
-  data/                 # bot.session, токены Google (gitignored)
-  .claude/plans/        # план разработки
+    login.py
+    google_login.py
+  data/                         # сессии, токены, БД (gitignored)
 ```
