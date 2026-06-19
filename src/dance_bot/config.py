@@ -17,8 +17,14 @@ class Settings(BaseSettings):
     session_path: Path = Path("data/bot.session")
     db_path: Path = Path("data/events.db")
 
-    telegram_channels: list[str] = ["kredo_dance", "KIZonEVERYone"]
-    history_hours: int = 24
+    telegram_channels: list[str] = [
+        "kredo_dance",
+        "plyas_dance",
+        "KIZonEVERYone",
+        "danceforever_minsk",
+        "estarico_dance",
+    ]
+    history_hours: int = 168  # 7 days — initial backfill when channel has no messages in DB
 
     google_credentials_path: Path = Path("data/google_credentials.json")
     google_token_path: Path = Path("data/google_token.json")

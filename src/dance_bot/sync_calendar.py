@@ -1,12 +1,20 @@
 import structlog
 
-from dance_bot.calendar_sync import insert_calendar_event
+from dance_bot.calendar_sync import clear_all_calendar_events, insert_calendar_event
 from dance_bot.db import Database
 from dance_bot.extractor import Event
 
 log = structlog.get_logger()
 
 _SINK = "google_calendar"
+
+
+def clear_calendar(db: Database) -> int:
+    """Delete all events from the target Google Calendar and clear sync_log."""
+    deleted = clear_all_calendar_events()
+    cleared = db.clear_sync_log(sink=_SINK)
+    log.info("Calendar cleared", deleted=deleted, sync_log_cleared=cleared)
+    return deleted
 
 
 def sync_calendar(db: Database) -> None:

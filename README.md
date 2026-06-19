@@ -107,8 +107,8 @@ fetch_messages → parse_messages → parse_events → sync_calendar
 
 | Параметр | По умолчанию |
 |----------|--------------|
-| `telegram_channels` | `kredo_dance`, `KIZonEVERYone` |
-| `history_hours` | `24` (глубина при первой загрузке канала) |
+| `telegram_channels` | `kredo_dance`, `plyas_dance`, `KIZonEVERYone`, `danceforever_minsk`, `estarico_dance` |
+| `history_hours` | `168` (7 дней — глубина при первой загрузке канала, если в БД нет сообщений) |
 | `google_calendar_name` | `Танцы Минск` |
 | `timezone` | `Europe/Minsk` |
 

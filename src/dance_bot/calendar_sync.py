@@ -184,3 +184,35 @@ def insert_calendar_event(
             ).execute()
             return "restored"
         return "skipped"
+
+
+def clear_all_calendar_events() -> int:
+    """Permanently delete all events from the target calendar, including cancelled."""
+    service = _get_service()
+    calendar_id = _get_calendar_id()
+    deleted = 0
+    page_token: str | None = None
+
+    while True:
+        result = (
+            service.events()
+            .list(
+                calendarId=calendar_id,
+                showDeleted=True,
+                singleEvents=True,
+                maxResults=250,
+                pageToken=page_token,
+            )
+            .execute()
+        )
+        for item in result.get("items", []):
+            service.events().delete(
+                calendarId=calendar_id, eventId=item["id"]
+            ).execute()
+            deleted += 1
+
+        page_token = result.get("nextPageToken")
+        if not page_token:
+            break
+
+    return deleted

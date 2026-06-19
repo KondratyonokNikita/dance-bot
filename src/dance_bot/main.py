@@ -20,6 +20,8 @@ def main() -> None:
         parse_messages(db)
         parse_events(db)
         sync_calendar(db)
+
+        # clear_calendar(db)
     finally:
         db.close()
 

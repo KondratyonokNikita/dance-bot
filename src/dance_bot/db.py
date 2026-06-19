@@ -457,3 +457,11 @@ class Database:
             (event_id, sink, external_id, status, now),
         )
         self._conn.commit()
+
+    def clear_sync_log(self, sink: str = "google_calendar") -> int:
+        cursor = self._conn.execute(
+            "DELETE FROM sync_log WHERE sink = ?",
+            (sink,),
+        )
+        self._conn.commit()
+        return cursor.rowcount
