@@ -12,6 +12,9 @@ from dance_bot.extractor import Event
 EventType = Literal["party", "protanzovka", "openair", "dance_class"]
 DanceType = Literal["bachata", "kizomba", "zouk"]
 
+CALENDAR_SINK_PREFIX = "google_calendar"
+DEFAULT_DANCE: DanceType = "bachata"
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS raw_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,6 +75,17 @@ def event_dedup_key(event: Event) -> str:
     return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 
+def calendar_sink(dance: DanceType) -> str:
+    return f"{CALENDAR_SINK_PREFIX}:{dance}"
+
+
+def target_dances(dances: list[DanceType]) -> list[DanceType]:
+    valid = [d for d in dances if d in ("bachata", "kizomba", "zouk")]
+    if valid:
+        return list(dict.fromkeys(valid))
+    return [DEFAULT_DANCE]
+
+
 @dataclass(frozen=True)
 class RawMessageRow:
     id: int
@@ -105,6 +119,12 @@ class EventRow:
     dedup_key: str
     source_url: str
     message: str | None
+
+
+@dataclass(frozen=True)
+class CalendarSyncRow:
+    event: EventRow
+    dance: DanceType
 
 
 class Database:
@@ -409,23 +429,29 @@ class Database:
         )
         self._conn.commit()
 
-    def list_unsynced_for_calendar(
-        self, sink: str = "google_calendar"
-    ) -> list[EventRow]:
+    def list_unsynced_for_calendar(self) -> list[CalendarSyncRow]:
         rows = self._conn.execute(
             """
             SELECT e.id, e.event_type, e.dances, e.date, e.time_start, e.time_end,
                    e.location, e.price, e.dedup_key, r.source_url, r.message
             FROM events e
             JOIN raw_messages r ON r.id = e.raw_message_id
-            LEFT JOIN sync_log s ON s.event_id = e.id AND s.sink = ?
-            WHERE s.id IS NULL
             ORDER BY e.date ASC, e.time_start ASC, e.id ASC
-            """,
-            (sink,),
+            """
         ).fetchall()
-        return [
-            EventRow(
+        synced_rows = self._conn.execute(
+            """
+            SELECT event_id, sink
+            FROM sync_log
+            WHERE sink LIKE ?
+            """,
+            (f"{CALENDAR_SINK_PREFIX}:%",),
+        ).fetchall()
+        synced = {(row["event_id"], row["sink"]) for row in synced_rows}
+
+        result: list[CalendarSyncRow] = []
+        for row in rows:
+            event = EventRow(
                 id=row["id"],
                 event_type=row["event_type"],
                 dances=json.loads(row["dances"]),
@@ -438,8 +464,10 @@ class Database:
                 source_url=row["source_url"],
                 message=row["message"],
             )
-            for row in rows
-        ]
+            for dance in target_dances(event.dances):
+                if (event.id, calendar_sink(dance)) not in synced:
+                    result.append(CalendarSyncRow(event=event, dance=dance))
+        return result
 
     def record_sync(
         self,
@@ -460,10 +488,10 @@ class Database:
         )
         self._conn.commit()
 
-    def clear_sync_log(self, sink: str = "google_calendar") -> int:
+    def clear_sync_log(self) -> int:
         cursor = self._conn.execute(
-            "DELETE FROM sync_log WHERE sink = ?",
-            (sink,),
+            "DELETE FROM sync_log WHERE sink LIKE ?",
+            (f"{CALENDAR_SINK_PREFIX}:%",),
         )
         self._conn.commit()
         return cursor.rowcount

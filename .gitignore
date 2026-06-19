@@ -6,4 +6,4 @@ data/
 *.session
 *.session-journal
 .DS_Store
-.claude/.ast-index-skip
+.claude/

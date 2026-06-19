@@ -2,6 +2,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DANCE_TYPES = ("bachata", "kizomba", "zouk")
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -28,7 +30,11 @@ class Settings(BaseSettings):
 
     google_credentials_path: Path = Path("data/google_credentials.json")
     google_token_path: Path = Path("data/google_token.json")
-    google_calendar_name: str = "Танцы Минск"
+    google_calendars: dict[str, str] = {
+        "bachata": "Танцы - Бачата",
+        "kizomba": "Танцы - Кизомба",
+        "zouk": "Танцы - Зук",
+    }
     timezone: str = "Europe/Minsk"
 
 

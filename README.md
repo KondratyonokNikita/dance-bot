@@ -1,17 +1,16 @@
 # dance-bot
 
-Агрегатор анонсов социальных танцев (bachata, kizomba, zouk) из Telegram-каналов Минска. Бот собирает посты из студий и сообществ, извлекает даты и места через LLM и публикует события в общий Google Calendar **«Танцы Минск»**.
+Агрегатор анонсов социальных танцев (bachata, kizomba, zouk) из Telegram-каналов Минска. Бот собирает посты из студий и сообществ, извлекает даты и места через LLM и публикует события в Google Calendar — **отдельный календарь на каждый танец**.
 
 - **[Github Pages](https://kondratyonoknikita.github.io/dance-bot/)**
 
-  Веб-страница с календарём — можно смотреть в браузере без Google-аккаунта. На странице также есть ссылки для подписки через Google Calendar и iCal (Apple Calendar, Outlook и др.).
+  Веб-страница с тремя календарями сразу — можно смотреть в браузере без Google-аккаунта.
 
-- **[Google calendar](https://calendar.google.com/calendar/u/0?cid=M2I3NWE2NjhiOTdjZjAxZjgxZmE1Mjc5N2UyZGFkOTEzZTgxMDkxNDMzNzU0OGY4OTQ1ZWVmMGVhNjVmYzAwN0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t)**
+- **Google Calendar — подписка по танцам**
 
-  Текстом для удобного копирования для подписки
-  ```
-  https://calendar.google.com/calendar/u/0?cid=M2I3NWE2NjhiOTdjZjAxZjgxZmE1Mjc5N2UyZGFkOTEzZTgxMDkxNDMzNzU0OGY4OTQ1ZWVmMGVhNjVmYzAwN0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t
-  ```
+  - [Бачата](https://calendar.google.com/calendar/u/0?cid=M2I3NWE2NjhiOTdjZjAxZjgxZmE1Mjc5N2UyZGFkOTEzZTgxMDkxNDMzNzU0OGY4OTQ1ZWVmMGVhNjVmYzAwN0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t)
+  - [Кизомба](https://calendar.google.com/calendar/u/0?cid=MjFjZDAxYjBjMzA1ZjNiOTQ0NGJkYjFkZTlkOWI2ZDhiMTZmMzEzNDhkYzRhMzAwOWM2YTlhZjY4ZWRmOThjN0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t)
+  - [Зук](https://calendar.google.com/calendar/u/0?cid=NDFmZGU5M2EwNjAyODM2MmUxNjY0MWE2Zjk2ZmNiZDYwN2Y1OTRiMmRlMWM0MmRjNzRmZjdmN2JiYzlhNjhiZEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t)
 
 **Источники:** студии и каналы вроде:
  - [Kredo](https://t.me/kredo_dance)
@@ -20,7 +19,7 @@
  - [ESTA RICO](https://t.me/estarico_dance)
  - и другие
 
-**Что попадает в календарь:** вечеринки, open-air, протанцовки, классы — с указанием времени, места, цены и ссылкой на оригинальный пост.
+**Что попадает в календарь:** вечеринки, open-air, протанцовки, классы — с указанием времени, места, цены и ссылкой на оригинальный пост. Событие с несколькими танцами попадает в несколько календарей.
 
 ## Как читать события
 
@@ -29,7 +28,7 @@
 | Название | `Bachata / Kizomba — Party` |
 | Место | `Bali, Кирова, 13` |
 | Описание | тип, танцы, цена, текст поста, ссылка на Telegram |
-| Цвет | красный — party, зелёный — open-air, бирюзовый — протанцовка, синий — класс |
+| Цвет | задаётся календарём (бачата / кизомба / зук) |
 
 ## Фидбэк
 

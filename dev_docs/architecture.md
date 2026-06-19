@@ -26,13 +26,23 @@ fetch_messages → parse_messages → parse_events → sync_calendar
 
 ## Google Calendar
 
-- Календарь: **«Танцы Минск»**
-- Title: `Bachata / Kizomba — Party`
-- Цвета: party — красный, open-air — зелёный, протанцовка — бирюзовый, класс — синий
+Три календаря — по одному на танец:
+
+| Танец | Календарь |
+|-------|-----------|
+| `bachata` | Танцы - Бачата |
+| `kizomba` | Танцы - Кизомба |
+| `zouk` | Танцы - Зук |
+
+- Title: `Bachata / Kizomba — Party` (полный список танцев из события)
+- Цвет: задаётся календарём в Google UI (не `colorId` per-event)
 - Описание: тип, танцы, цена, полный текст поста, ссылка на источник
-- Дедуп: `dedup_key = SHA256(date|time_start|location)` как `event.id`
+- Маршрутизация: событие попадает в календарь каждого танца из `dances`; если `dances: []` — в бачата
+- Mixed events дублируются во все соответствующие календари
+- Дедуп: `dedup_key = SHA256(date|time_start|location)` как `event.id` (уникален внутри календаря)
+- `sync_log.sink`: `google_calendar:bachata` / `kizomba` / `zouk`
 - Удалённые в UI события (`cancelled`) восстанавливаются при следующей синхронизации
-- `clear_calendar(db)` — удаляет все активные события из календаря и очищает `sync_log`
+- `clear_calendar(db)` — удаляет все активные события из всех трёх календарей и очищает `sync_log`
 
 ## Конфигурация
 
@@ -42,7 +52,7 @@ fetch_messages → parse_messages → parse_events → sync_calendar
 |----------|--------------|
 | `telegram_channels` | `kredo_dance`, `plyas_dance`, `KIZonEVERYone`, `danceforever_minsk`, `estarico_dance` |
 | `history_hours` | `168` (7 дней — глубина при первой загрузке канала, если в БД нет сообщений) |
-| `google_calendar_name` | `Танцы Минск` |
+| `google_calendars` | `bachata` → «Танцы - Бачата», `kizomba` → «Танцы - Кизомба», `zouk` → «Танцы - Зук» |
 | `timezone` | `Europe/Minsk` |
 
 ## Источники

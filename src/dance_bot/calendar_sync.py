@@ -7,13 +7,12 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from dance_bot.config import get_settings
+from dance_bot.config import DANCE_TYPES, get_settings
 from dance_bot.extractor import Event
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 _DEFAULT_DURATION = timedelta(hours=2)
-_SINK = "google_calendar"
 
 _TYPE_LABELS = {
     "party": "Party",
@@ -41,15 +40,8 @@ _DANCE_LABELS_RU = {
     "zouk": "зук",
 }
 
-_COLOR_IDS: dict[str, str] = {
-    "party": "11",
-    "openair": "10",
-    "protanzovka": "7",
-    "dance_class": "9",
-}
-
 _service: Any | None = None
-_calendar_id: str | None = None
+_calendar_ids: dict[str, str] = {}
 
 
 def _get_service() -> Any:
@@ -74,20 +66,23 @@ def _get_service() -> Any:
     return _service
 
 
-def _get_calendar_id() -> str:
-    global _calendar_id
-    if _calendar_id is not None:
-        return _calendar_id
+def _get_calendar_id(dance: str) -> str:
+    if dance in _calendar_ids:
+        return _calendar_ids[dance]
 
     settings = get_settings()
+    calendar_name = settings.google_calendars.get(dance)
+    if calendar_name is None:
+        raise RuntimeError(f"Unknown dance calendar: {dance}")
+
     service = _get_service()
     for entry in service.calendarList().list().execute().get("items", []):
-        if entry.get("summary") == settings.google_calendar_name:
-            _calendar_id = entry["id"]
-            return _calendar_id
+        if entry.get("summary") == calendar_name:
+            _calendar_ids[dance] = entry["id"]
+            return _calendar_ids[dance]
 
     raise RuntimeError(
-        f"Calendar '{settings.google_calendar_name}' not found — "
+        f"Calendar '{calendar_name}' not found — "
         "create it manually at https://calendar.google.com"
     )
 
@@ -128,7 +123,6 @@ def _build_payload(
         "id": dedup_key,
         "summary": _event_title(event),
         "description": _event_description(event, source_url, raw_message),
-        "colorId": _COLOR_IDS[event.event_type],
     }
     if event.location:
         payload["location"] = event.location
@@ -164,14 +158,15 @@ def insert_calendar_event(
     event: Event,
     source_url: str,
     dedup_key: str,
+    dance: str,
     raw_message: str | None = None,
 ) -> Literal["inserted", "restored", "skipped"]:
-    """Insert one event into Google Calendar."""
+    """Insert one event into the Google Calendar for a dance style."""
     if not event.date:
         return "skipped"
 
     service = _get_service()
-    calendar_id = _get_calendar_id()
+    calendar_id = _get_calendar_id(dance)
     payload = _build_payload(event, source_url, dedup_key, raw_message)
 
     try:
@@ -195,10 +190,9 @@ def insert_calendar_event(
         return "skipped"
 
 
-def clear_all_calendar_events() -> int:
-    """Permanently delete all events from the target calendar, including cancelled."""
+def _clear_calendar(dance: str) -> int:
     service = _get_service()
-    calendar_id = _get_calendar_id()
+    calendar_id = _get_calendar_id(dance)
     deleted = 0
     page_token: str | None = None
 
@@ -232,3 +226,8 @@ def clear_all_calendar_events() -> int:
             break
 
     return deleted
+
+
+def clear_all_calendar_events() -> int:
+    """Permanently delete all events from all dance calendars, including cancelled."""
+    return sum(_clear_calendar(dance) for dance in DANCE_TYPES)

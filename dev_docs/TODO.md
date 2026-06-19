@@ -50,16 +50,7 @@
 
 - [ ] **Отдельные CLI-команды для этапов пайплайна** — `fetch`, `parse`, `events`, `sync` (и, возможно, `clear-calendar`) для дебага без полного прогона. Entry-points в `pyproject.toml` или subcommands через `argparse`/`typer` в `main.py`.
 
-- [ ] **Отдельные Google Calendar по танцам** — разделить мероприятия на календари Bachata / Kizomba / Zouk, чтобы у подписчиков и в embed на GitHub Pages были разные цвета (Google не показывает `colorId` per-event в одном календаре).
-
-  **Что сделать:**
-
-  1. Создать в Google Calendar три публичных календаря (или по одному на танец).
-  2. Конфиг: маппинг `dance → calendar_name` / `calendar_id` в `config.py`.
-  3. **`sync_calendar`:** для каждого события с `dances: ["bachata", "kizomba"]` — записать копию в оба календаря (разные `dedup_key` или `(dedup_key, dance)` в `sync_log`).
-  4. **`sync_log`:** учитывать sink на пару `(event_id, calendar)` — одно событие может быть в нескольких календарях.
-  5. **`index.html`:** embed с несколькими `src=` (по одному на календарь).
-  6. **README:** ссылки на подписку для каждого календаря (или одна страница с тремя embed).
+- [x] **Отдельные Google Calendar по танцам** — три календаря (Bachata / Kizomba / Zouk), дублирование mixed events, embed на GitHub Pages. План: [`.claude/plans/dance-calendars.md`](../.claude/plans/dance-calendars.md).
 
 ---
 

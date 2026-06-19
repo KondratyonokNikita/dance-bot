@@ -50,7 +50,7 @@ uv sync
 
 1. Создать проект на [console.cloud.google.com](https://console.cloud.google.com), включить **Google Calendar API**.
 2. OAuth consent screen (External) + Desktop OAuth client → скачать JSON как `data/google_credentials.json`.
-3. Создать календарь **«Танцы Минск»** на [calendar.google.com](https://calendar.google.com) (или поменять `google_calendar_name` в `config.py`).
+3. Создать три календаря на [calendar.google.com](https://calendar.google.com): **«Танцы - Бачата»**, **«Танцы - Кизомба»**, **«Танцы - Зук»** (или поменять `google_calendars` в `config.py`).
 4. Авторизоваться:
 
    ```sh
