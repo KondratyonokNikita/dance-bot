@@ -58,7 +58,7 @@ def _fetch_channel(
         ):
             inserted += 1
 
-    log.info(
+    log.warning(
         "Channel fetched",
         channel=channel,
         fetched=fetched,
@@ -69,40 +69,22 @@ def _fetch_channel(
     return fetched, inserted, filter_passed
 
 
-def fetch_messages(db: Database) -> None:
+def fetch_messages(db: Database, client: TelegramClient) -> None:
     settings = get_settings()
-    settings.session_path.parent.mkdir(parents=True, exist_ok=True)
 
-    client = TelegramClient(
-        str(settings.session_path),
-        settings.telegram_api_id,
-        settings.telegram_api_hash,
-    )
-    client.connect()
+    me = client.get_me()
+    log.info("Logged in", user_id=me.id, username=me.username)
 
-    try:
-        if not client.is_user_authorized():
-            log.error(
-                "Not authorized — run `uv run python scripts/login.py` first",
-                session=str(settings.session_path),
-            )
-            return
+    dialogs_by_title = {d.name: d.entity for d in client.iter_dialogs()}
 
-        me = client.get_me()
-        log.info("Logged in", user_id=me.id, username=me.username)
-
-        dialogs_by_title = {d.name: d.entity for d in client.iter_dialogs()}
-
-        for channel in settings.telegram_channels:
-            entity = dialogs_by_title.get(channel) or client.get_entity(channel)
-            username = getattr(entity, "username", None)
-            _fetch_channel(
-                client,
-                db,
-                channel=channel,
-                entity=entity,
-                username=username,
-                history_hours=settings.history_hours,
-            )
-    finally:
-        client.disconnect()
+    for channel in settings.telegram_channels:
+        entity = dialogs_by_title.get(channel) or client.get_entity(channel)
+        username = getattr(entity, "username", None)
+        _fetch_channel(
+            client,
+            db,
+            channel=channel,
+            entity=entity,
+            username=username,
+            history_hours=settings.history_hours,
+        )

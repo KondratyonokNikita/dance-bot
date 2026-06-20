@@ -6,13 +6,50 @@ from dance_bot.extractor import parse_extraction
 log = structlog.get_logger()
 
 
-def parse_events(db: Database) -> None:
+class ParseEventsSummary:
+    __slots__ = (
+        "messages_processed",
+        "inserted",
+        "skipped_duplicate",
+        "skipped_no_time",
+        "cancelled",
+        "cancellation_unmatched",
+        "cancellation_ambiguous",
+    )
+
+    def __init__(self) -> None:
+        self.messages_processed = 0
+        self.inserted = 0
+        self.skipped_duplicate = 0
+        self.skipped_no_time = 0
+        self.cancelled = 0
+        self.cancellation_unmatched = 0
+        self.cancellation_ambiguous = 0
+
+
+def _log_events_summary(summary: ParseEventsSummary) -> None:
+    log.warning(
+        "New events",
+        messages_processed=summary.messages_processed,
+        inserted=summary.inserted,
+        skipped_duplicate=summary.skipped_duplicate,
+        skipped_no_time=summary.skipped_no_time,
+        cancelled=summary.cancelled,
+        cancellation_unmatched=summary.cancellation_unmatched,
+        cancellation_ambiguous=summary.cancellation_ambiguous,
+    )
+
+
+def parse_events(db: Database) -> ParseEventsSummary:
     rows = db.list_unprocessed_for_events()
+    summary = ParseEventsSummary()
     if not rows:
         log.info("No parsed messages to extract events from")
-        return
+        _log_events_summary(summary)
+        return summary
 
     for row in rows:
+        summary.messages_processed += 1
         extraction = parse_extraction(row.parsed_message)
         inserted = 0
         skipped = 0
@@ -53,7 +90,7 @@ def parse_events(db: Database) -> None:
                 )
                 cancelled += 1
             elif len(candidates) == 0:
-                log.warning(
+                log.info(
                     "Cancellation unmatched",
                     raw_message_id=row.raw_message_id,
                     parsed_message_id=row.id,
@@ -64,7 +101,7 @@ def parse_events(db: Database) -> None:
                 )
                 unmatched += 1
             else:
-                log.warning(
+                log.info(
                     "Cancellation ambiguous",
                     raw_message_id=row.raw_message_id,
                     parsed_message_id=row.id,
@@ -97,3 +134,12 @@ def parse_events(db: Database) -> None:
             skipped_duplicate=skipped,
             skipped_no_time=skipped_no_time,
         )
+        summary.inserted += inserted
+        summary.skipped_duplicate += skipped
+        summary.skipped_no_time += skipped_no_time
+        summary.cancelled += cancelled
+        summary.cancellation_unmatched += unmatched
+        summary.cancellation_ambiguous += ambiguous
+
+    _log_events_summary(summary)
+    return summary

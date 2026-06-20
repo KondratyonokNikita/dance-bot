@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     session_path: Path = Path("data/bot.session")
     db_path: Path = Path("data/events.db")
+    lock_path: Path = Path("data/dance-bot.lock")
 
     telegram_channels: list[str] = [
         "kredo_dance",
@@ -36,6 +37,15 @@ class Settings(BaseSettings):
         "zouk": "Танцы - Зук",
     }
     timezone: str = "Europe/Minsk"
+
+    # Интервал автозапуска (launchd StartInterval, секунды).
+    run_interval_seconds: int = 3600
+    launchd_label: str = "com.user.dance-bot"
+
+    telegram_log_chat: str = "Моя жизнь"
+    telegram_log_topic: str = "Dance_bot_log"
+    telegram_log_enabled: bool = True
+    telegram_log_min_level: str = "WARNING"
 
 
 def get_settings() -> Settings:
